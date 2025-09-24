@@ -1,0 +1,39 @@
+# Python / Django
+__pycache__/
+*.py[cod]
+
+# Base SQLite
+db.sqlite3
+*.sqlite3
+
+# Environnements virtuels
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.*
+
+# Fichiers temporaires / caches
+*.log
+*.pot
+*.pyc
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Django
+media/
+staticfiles/
+
+# IDE / éditeurs
+.vscode/
+.idea/
+
+# Migrations compilées (optionnel)
+**/migrations/__pycache__/
+
+# Secrets locaux
+*.env.local
