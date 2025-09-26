@@ -1,16 +1,28 @@
+"""
+Permissions pour l'app 'projects_app'.
+
+Règles clés (CDC) :
+- Accès aux ressources d'un projet réservé aux contributeurs du projet.
+- Issue : seuls l'auteur de l'issue (ou staff) peut modifier/supprimer.
+- Comment : seul l'auteur du commentaire (ou staff) peut modifier/supprimer.
+"""
+
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from .models import Project, Contributor, Issue, Comment
 
 
 def is_contributor(user, project_id) -> bool:
-    """Retourne True si l'utilisateur est membre (Contributor) du projet."""
+    """
+    True si l'utilisateur est membre (Contributor) du projet.
+    Utilise .exists() pour ne pas charger d'objets en mémoire.
+    """
     return Contributor.objects.filter(user=user, project_id=project_id).exists()
 
 
 class IsProjectAuthorOrReadOnly(BasePermission):
     """
-    Projets :
-    - Lecture : autorisée à tout utilisateur authentifié membre du projet
+    PROJETS
+    - Lecture : autorisée aux utilisateurs authentifiés membres du projet
     - Écriture : réservée à l’auteur du projet
     """
     def has_object_permission(self, request, view, obj: Project):
@@ -21,9 +33,10 @@ class IsProjectAuthorOrReadOnly(BasePermission):
 
 class IsProjectAuthorForContributorWrite(BasePermission):
     """
-    Contributors :
+    CONTRIBUTORS
     - Lecture : autorisée aux membres du projet
     - Création/Suppression/Modification : réservées à l’auteur du projet
+      (la vérification finale est aussi faite en view.perform_create)
     """
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated
@@ -36,14 +49,14 @@ class IsProjectAuthorForContributorWrite(BasePermission):
 
 class IsProjectContributor(BasePermission):
     """
-    Garde-fou "membre du projet".
+    GARDE 'MEMBRE DU PROJET' POUR TOUTES LES RESSOURCES DU PROJET
 
-    - SAFE (GET/HEAD/OPTIONS) : utilisateur authentifié OK.
-    - POST (création) : on exige que l'utilisateur soit contributor du projet ciblé.
-      * Issue : project dans body (ou query en fallback).
-      * Comment : issue dans body (ou query) → on déduit le project.
-    - Routes detail (retrieve/update/partial_update/destroy) : on délègue à
-      has_object_permission qui lit le project depuis l'objet.
+    - SAFE (GET/HEAD/OPTIONS) : utilisateur authentifié = OK
+    - POST (création) : on exige que l'utilisateur soit contributor du projet ciblé
+      * Issue : 'project' dans le body (ou query en fallback)
+      * Comment : 'issue' dans le body (ou query) → on déduit le 'project'
+    - Routes detail (retrieve/update/partial_update/destroy) :
+      on délègue à has_object_permission qui lit le projet depuis l'objet.
     """
     def has_permission(self, request, view):
         user = request.user
@@ -53,7 +66,8 @@ class IsProjectContributor(BasePermission):
         if request.method in SAFE_METHODS:
             return True
 
-        # Pour les actions detail, on laisse has_object_permission décider.
+        # Sur les actions "detail" (update/partial_update/destroy), on laisse
+        # has_object_permission valider l'appartenance via l'objet.
         if getattr(view, "action", None) in ("retrieve", "update", "partial_update", "destroy"):
             return True
 
@@ -74,7 +88,7 @@ class IsProjectContributor(BasePermission):
         return bool(project_id) and is_contributor(user, project_id)
 
     def has_object_permission(self, request, view, obj):
-        # Récupère le project_id depuis l'objet manipulé.
+        # Déduit project_id depuis l'objet manipulé
         if isinstance(obj, Issue):
             project_id = obj.project_id
         elif isinstance(obj, Comment):
@@ -92,34 +106,27 @@ class IsProjectContributor(BasePermission):
         )
 
 
-class IsIssueEditor(BasePermission):
+class IsIssueAuthorOrStaff(BasePermission):
     """
-    Issues :
-    - Lecture : ok (gérée par IsProjectContributor)
-    - Écriture (PUT/PATCH/DELETE) : autorisée si l'utilisateur est
-      * l'auteur de l'issue, OU
-      * l'assignee, OU
-      * l'auteur du projet, OU
-      * staff.
+    ISSUES — CONFORME CDC
+    Écriture (PUT/PATCH/DELETE) autorisée uniquement :
+      - à l'auteur de l'issue
+      - ou au staff
+    Lecture : autorisée (vérifiée en amont par IsProjectContributor)
     """
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
             return True
-
-        if isinstance(obj, Issue):
-            return (
-                obj.author_id == request.user.id
-                or obj.assignee_id == request.user.id
-                or obj.project.author_id == request.user.id
-                or request.user.is_staff
-            )
-
-        # Fallback générique si utilisé ailleurs
-        return request.user.is_staff or getattr(obj, "author_id", None) == request.user.id
+        # obj est une Issue ici
+        return getattr(obj, "author_id", None) == request.user.id or request.user.is_staff
 
 
 class IsAuthorOrReadOnly(BasePermission):
-    """Garde générique : seul l’auteur (ou staff) peut modifier/supprimer ; lecture autorisée."""
+    """
+    Garde générique (utile pour Comment) :
+    - Lecture autorisée pour tous (si déjà filtré par appartenance projet)
+    - Écriture réservée à l’auteur de l’objet ou au staff
+    """
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
             return True

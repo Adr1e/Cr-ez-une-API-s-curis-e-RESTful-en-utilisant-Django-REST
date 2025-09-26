@@ -37,3 +37,27 @@ staticfiles/
 
 # Secrets locaux
 *.env.local
+# SQLite journaux/temp
+*.sqlite3-journal
+*.sqlite3-shm
+*.sqlite3-wal
+db.sqlite3-journal
+
+# Packaging / build Python
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Outils & caches divers
+.tox/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Secrets/provisions locaux spécifiques au projet
+ACCESS_ADMIN
+*.pem
+*.key
+
+# Coverage supplémentaires
+coverage.xml

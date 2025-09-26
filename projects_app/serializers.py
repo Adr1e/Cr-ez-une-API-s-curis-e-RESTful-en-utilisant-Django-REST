@@ -1,18 +1,19 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Project, Contributor, Issue, Comment  # <-- ajouter Issue, Comment
+from .models import Project, Contributor, Issue, Comment
 
 User = get_user_model()
 
 
 class SimpleUserSerializer(serializers.ModelSerializer):
-    """Mini-serializer pour afficher un user dans un projet/contributor."""
+    """Projection légère d'un utilisateur pour l'affichage imbriqué."""
     class Meta:
         model = User
         fields = ("id", "username", "email")
 
 
 class ProjectSerializer(serializers.ModelSerializer):
+    """Projet + auteur (lecture seule). Crée automatiquement l'entrée Contributor auteur."""
     author = SimpleUserSerializer(read_only=True)
 
     class Meta:
@@ -23,15 +24,12 @@ class ProjectSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context.get("request")
         project = Project.objects.create(author=request.user, **validated_data)
-        Contributor.objects.create(
-            user=request.user,
-            project=project,
-            role=Contributor.ROLE_AUTHOR
-        )
+        Contributor.objects.create(user=request.user, project=project, role=Contributor.ROLE_AUTHOR)
         return project
 
 
 class ContributorSerializer(serializers.ModelSerializer):
+    """Association user ↔ project (rôle). Empêche les doublons."""
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all())
     user_detail = SimpleUserSerializer(source="user", read_only=True)
@@ -50,24 +48,19 @@ class ContributorSerializer(serializers.ModelSerializer):
 
 
 class IssueSerializer(serializers.ModelSerializer):
+    """Ticket d'un projet. L'auteur est toujours le request.user."""
     author = serializers.ReadOnlyField(source="author.id")
 
     class Meta:
         model = Issue
-        fields = [
-            "id", "title", "description", "tag", "priority", "status",
-            "project", "author", "assignee", "created_at", "updated_at"
-        ]
+        fields = ["id", "title", "description", "tag", "priority", "status",
+                  "project", "author", "assignee", "created_at", "updated_at"]
         read_only_fields = ["id", "author", "created_at", "updated_at"]
 
     def validate(self, attrs):
         request = self.context["request"]
-
-        # Déterminer le project_id:
         project = attrs.get("project") or (self.instance and self.instance.project)
         project_id = project.id if project else None
-
-        # assignee peut venir du payload ou rester identique en update partielle
         assignee = attrs.get("assignee") or (self.instance and self.instance.assignee)
 
         if project_id and not Contributor.objects.filter(user=request.user, project_id=project_id).exists():
@@ -82,6 +75,7 @@ class IssueSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    """Commentaire rattaché à une issue du projet."""
     author = serializers.ReadOnlyField(source="author.id")
 
     class Meta:
