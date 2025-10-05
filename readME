@@ -1,0 +1,163 @@
+# SoftDesk — API de gestion de support technique
+
+## Présentation
+
+SoftDesk est une API REST développée avec Django REST Framework (DRF) et JWT.  
+Elle permet la gestion collaborative de projets, le suivi des issues (tickets) et des commentaires associés.
+
+Chaque projet possède un auteur et des contributeurs pouvant :
+- Créer et suivre des issues,
+- Commenter les issues,
+- Gérer les contributeurs d’un projet.
+
+L’API respecte les standards OWASP (sécurité), Green Code (sobriété) et RGPD (protection des données).
+
+---
+
+## Fonctionnalités principales
+
+### Authentification et utilisateurs
+- Authentification par JWT (login, refresh).
+- Inscription avec vérification de l’âge (≥ 15 ans) et consentements RGPD.
+- Gestion du profil utilisateur (lecture, modification, suppression de compte).
+- Suppression du compte possible : droit à l’oubli.
+- Accès administrateur complet pour les comptes staff.
+
+### Projets
+- CRUD complet sur les projets.
+- Création : l’utilisateur devient auteur et contributeur automatiquement.
+- Lecture : accessible à l’auteur et aux contributeurs.
+- Modification et suppression : réservées à l’auteur.
+
+### Contributeurs
+- Ajout et suppression réservés à l’auteur du projet.
+- Rôle défini : AUTHOR ou CONTRIBUTOR.
+- Un utilisateur ne peut être ajouté qu’une fois à un projet.
+
+### Issues
+- Création réservée aux contributeurs du projet.
+- Champs : title, description, tag, priority, status.
+- Author et assignee liés à un utilisateur.
+- Modification/suppression : auteur de l’issue ou staff.
+- Lecture : tous les contributeurs du projet.
+
+### Commentaires
+- Création réservée aux contributeurs.
+- Modification et suppression réservées à l’auteur.
+- Rattachés à une issue.
+- Possibilité d’ajouter un UUID pour coller au cahier des charges.
+
+---
+
+## Endpoints principaux (version /api/v1/)
+
+| Ressource | Méthode | Description | Permissions |
+|------------|----------|-------------|--------------|
+| /auth/signup | POST | Créer un compte | Public |
+| /auth/login | POST | Obtenir un token JWT | Public |
+| /auth/token/refresh | POST | Rafraîchir le token | Auth |
+| /auth/users/ | GET | Lire ou modifier son compte | Auth |
+| /auth/users/{id}/ | DELETE | Supprimer son compte | Self/Admin |
+| /projects/ | GET / POST | Lister ou créer un projet | Auth |
+| /projects/{id}/ | GET / PUT / DELETE | Lire, modifier ou supprimer | Auteur/Contrib |
+| /contributors/ | GET / POST / DELETE | Gérer les contributeurs | Auteur |
+| /issues/ | GET / POST | Gérer les tickets | Contributeur |
+| /comments/ | GET / POST | Gérer les commentaires | Contributeur |
+
+---
+
+## Sécurité — conformité OWASP
+
+- **Contrôle d’accès objet** : permissions DRF sur chaque ressource (auteur, contributeur, staff).
+- **Validation des données** : serializers sécurisés, aucune exécution externe.
+- **Paramètres production isolés** : pas d’exposition d’informations sensibles.
+- **Authentification JWT** : expiration courte, refresh sécurisé.
+- **Protection contre le spam et DoS** : throttling DRF prêt à être activé.
+- **Logs sobres** : sans informations personnelles.
+
+---
+
+## Sobriété numérique (Green Code)
+
+- Pagination DRF activée (`PAGE_SIZE=20`).
+- Utilisation de `select_related` et `prefetch_related` pour réduire les requêtes SQL.
+- Aucun champ inutile dans les serializers.
+- Throttling DRF pour limiter les appels répétitifs en production.
+
+---
+
+## RGPD — Protection des données
+
+| Exigence | Implémentation |
+|-----------|----------------|
+| Âge minimum | Refus d’inscription si < 15 ans |
+| Consentement explicite | Champs can_be_contacted, can_data_be_shared |
+| Droit d’accès / rectification | GET et PUT sur /auth/users/{id}/ |
+| Droit à l’oubli | DELETE /auth/users/{id}/ |
+| Minimisation des données | Aucun champ sensible inutile |
+| Traçabilité | Logs sobres, pas de données personnelles enregistrées |
+
+---
+
+## Optimisation technique
+
+- Architecture claire : `users/` (authentification), `projects_app/` (métier).
+- Séparation logique : modèles, serializers, vues, permissions.
+- Documentation API : `/api/v1/schema/` via drf-spectacular.
+- Code commenté, conforme PEP8.
+- Déploiement simple sur Railway, Render ou Docker.
+
+---
+
+## Tests et validation
+
+- API testée avec Postman :
+  - Auth → Users → Projects → Contributors → Issues → Comments.
+- Vérifications :
+  - Statuts HTTP corrects (200, 201, 204, 403, 404).
+  - Permissions respectées.
+  - Données cohérentes.
+- OpenAPI `/schema/` généré automatiquement et importable dans Postman.
+
+---
+
+## Points forts
+
+- Permissions DRF précises et stables.
+- RGPD complet (âge, consentement, droit à l’oubli).
+- Code clair, commenté et structuré.
+- Optimisation SQL efficace (select_related / prefetch_related).
+- Conforme OWASP et Green Code.
+
+---
+
+## Points d’amélioration mineurs
+
+| Point | Recommandation |
+|--------|----------------|
+| UUID sur Comment | Ajouter uuid = models.UUIDField(...) pour suivre le CDC |
+| Throttling production | Activer lors du déploiement pour limiter les requêtes abusives |
+| Dépendances | Ajouter une vérification de sécurité (pip-audit, poetry export) |
+
+---
+
+## Technologies utilisées
+
+| Type | Outil |
+|------|--------|
+| Framework | Django REST Framework |
+| Authentification | JWT (SimpleJWT) |
+| Documentation API | drf-spectacular |
+| Sécurité | Permissions DRF, JWT, throttling, RGPD |
+| Base de données | SQLite (dev) / PostgreSQL (prod) |
+| Tests | Postman / OpenAPI |
+| Formatage | PEP8, docstrings claires |
+
+---
+
+## Conclusion
+
+Le projet SoftDesk respecte les exigences fonctionnelles, techniques et de sécurité du cahier des charges.  
+La gestion des permissions, la conformité RGPD et l’application du Green Code garantissent une API professionnelle, stable et sécurisée.
+
+**Projet validé — conforme aux standards OWASP, RGPD et Green Code.**

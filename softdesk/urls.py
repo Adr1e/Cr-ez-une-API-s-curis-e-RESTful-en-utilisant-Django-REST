@@ -3,7 +3,7 @@ from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
-# Views internes
+# Import des vues
 from users.views import SignupView, UserViewSet
 from projects_app.views import (
     ProjectViewSet,
@@ -12,40 +12,40 @@ from projects_app.views import (
     CommentViewSet,
 )
 
-# Auth JWT
+# Authentification JWT
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-# OpenAPI schema
+# Schéma OpenAPI
 from drf_spectacular.views import SpectacularAPIView
 
 
-# Router DRF
+# Configuration du routeur principal DRF
 router = DefaultRouter()
 
-# Users
+# Routes liées aux utilisateurs
 router.register(r"auth/users", UserViewSet, basename="user")
 
-# Projects / Contributors
+# Routes liées aux projets et contributeurs
 router.register(r"projects", ProjectViewSet, basename="project")
 router.register(r"contributors", ContributorViewSet, basename="contributor")
 
-# Issues / Comments
+# Routes liées aux issues et commentaires
 router.register(r"issues", IssueViewSet, basename="issue")
 router.register(r"comments", CommentViewSet, basename="comment")
 
 
 urlpatterns = [
-    # Django Admin
+    # Accès à l'administration Django
     path("admin/", admin.site.urls),
 
-    # Auth JWT + Signup
+    # Authentification JWT et inscription
     path("api/v1/auth/login", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/v1/auth/token/refresh", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/v1/auth/signup", SignupView.as_view(), name="auth-signup"),
 
-    # API (toutes les routes enregistrées dans router)
+    # Inclusion des routes générées par le routeur
     path("api/v1/", include(router.urls)),
 
-    # Schéma OpenAPI (protégé par IsAuthenticated via settings)
+    # Endpoint pour le schéma OpenAPI (utilisé pour la documentation)
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),
 ]

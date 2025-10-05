@@ -6,14 +6,21 @@ User = get_user_model()
 
 
 class SimpleUserSerializer(serializers.ModelSerializer):
-    """Projection légère d'un utilisateur pour l'affichage imbriqué."""
+    """
+    Représentation légère d'un utilisateur.
+    Utilisée pour imbriquer un auteur ou un contributeur sans tout le profil.
+    """
     class Meta:
         model = User
         fields = ("id", "username", "email")
 
 
 class ProjectSerializer(serializers.ModelSerializer):
-    """Projet + auteur (lecture seule). Crée automatiquement l'entrée Contributor auteur."""
+    """
+    Sérialiseur de projet.
+    - L'auteur est en lecture seule et renvoyé via SimpleUserSerializer.
+    - À la création, on associe automatiquement le créateur comme AUTHOR dans Contributor.
+    """
     author = SimpleUserSerializer(read_only=True)
 
     class Meta:
@@ -22,6 +29,10 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "author", "created_at")
 
     def create(self, validated_data):
+        """
+        Crée un projet avec l'utilisateur courant comme auteur.
+        Ajoute également une entrée Contributor avec le rôle AUTHOR.
+        """
         request = self.context.get("request")
         project = Project.objects.create(author=request.user, **validated_data)
         Contributor.objects.create(user=request.user, project=project, role=Contributor.ROLE_AUTHOR)
@@ -29,7 +40,11 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 
 class ContributorSerializer(serializers.ModelSerializer):
-    """Association user ↔ project (rôle). Empêche les doublons."""
+    """
+    Sérialiseur de contributeur (lien user ↔ project).
+    - Empêche les doublons user/projet.
+    - Expose un résumé du user via user_detail.
+    """
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     project = serializers.PrimaryKeyRelatedField(queryset=Project.objects.all())
     user_detail = SimpleUserSerializer(source="user", read_only=True)
@@ -40,6 +55,9 @@ class ContributorSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "created_at")
 
     def validate(self, attrs):
+        """
+        Refuse l'ajout si l'utilisateur est déjà contributeur du projet.
+        """
         user = attrs.get("user")
         project = attrs.get("project")
         if Contributor.objects.filter(user=user, project=project).exists():
@@ -48,34 +66,55 @@ class ContributorSerializer(serializers.ModelSerializer):
 
 
 class IssueSerializer(serializers.ModelSerializer):
-    """Ticket d'un projet. L'auteur est toujours le request.user."""
+    """
+    Sérialiseur d'issue.
+    - L'auteur est toujours le request.user et reste en lecture seule côté client.
+    - Valide que le créateur et l'assigné appartiennent au projet ciblé.
+    """
     author = serializers.ReadOnlyField(source="author.id")
 
     class Meta:
         model = Issue
-        fields = ["id", "title", "description", "tag", "priority", "status",
-                  "project", "author", "assignee", "created_at", "updated_at"]
+        fields = [
+            "id", "title", "description", "tag", "priority", "status",
+            "project", "author", "assignee", "created_at", "updated_at"
+        ]
         read_only_fields = ["id", "author", "created_at", "updated_at"]
 
     def validate(self, attrs):
+        """
+        Règles de validation :
+        - Le demandeur doit être contributeur du projet.
+        - L'assigné doit aussi être contributeur du même projet.
+        """
         request = self.context["request"]
         project = attrs.get("project") or (self.instance and self.instance.project)
         project_id = project.id if project else None
         assignee = attrs.get("assignee") or (self.instance and self.instance.assignee)
 
+        # L'utilisateur courant doit appartenir au projet
         if project_id and not Contributor.objects.filter(user=request.user, project_id=project_id).exists():
             raise serializers.ValidationError("You must be a contributor of this project.")
+
+        # L'assigné doit appartenir au même projet
         if assignee and project_id and not Contributor.objects.filter(user=assignee, project_id=project_id).exists():
             raise serializers.ValidationError("Assignee must be a contributor of the same project.")
         return attrs
 
     def create(self, validated_data):
+        """
+        Affecte automatiquement l'auteur depuis le contexte de la requête.
+        """
         validated_data["author"] = self.context["request"].user
         return super().create(validated_data)
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    """Commentaire rattaché à une issue du projet."""
+    """
+    Sérialiseur de commentaire.
+    - L'auteur est imposé côté serveur.
+    - Vérifie que l'utilisateur qui commente est bien contributeur du projet de l'issue.
+    """
     author = serializers.ReadOnlyField(source="author.id")
 
     class Meta:
@@ -84,6 +123,10 @@ class CommentSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "author", "created_at", "updated_at"]
 
     def validate(self, attrs):
+        """
+        Refuse la création/modification si l'utilisateur n'est pas contributeur
+        du projet auquel appartient l'issue ciblée.
+        """
         request = self.context["request"]
         issue = attrs.get("issue") or (self.instance and self.instance.issue)
         if issue and not Contributor.objects.filter(user=request.user, project=issue.project).exists():
@@ -91,5 +134,8 @@ class CommentSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        """
+        Affecte automatiquement l'auteur depuis le contexte de la requête.
+        """
         validated_data["author"] = self.context["request"].user
         return super().create(validated_data)

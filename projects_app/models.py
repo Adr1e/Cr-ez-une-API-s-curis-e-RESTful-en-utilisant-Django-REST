@@ -35,7 +35,7 @@ class Project(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    def __str__(self) -> str:
+    def __str__(self) :
         return f"{self.name} ({self.type})"
 
 
@@ -72,51 +72,71 @@ class Contributor(models.Model):
 
 
 class Issue(models.Model):
+    # Catégories possibles pour un ticket (bug, fonctionnalité ou tâche)
     class Tag(models.TextChoices):
         BUG = "BUG", "Bug"
         FEATURE = "FEATURE", "Feature"
         TASK = "TASK", "Task"
 
+    # Niveaux de priorité d'une issue
     class Priority(models.TextChoices):
         LOW = "LOW", "Low"
         MEDIUM = "MEDIUM", "Medium"
         HIGH = "HIGH", "High"
 
+    # Statuts possibles d'une issue
     class Status(models.TextChoices):
         TODO = "TODO", "To do"
         IN_PROGRESS = "IN_PROGRESS", "In progress"
         DONE = "DONE", "Done"
 
+    # Titre du ticket
     title = models.CharField(max_length=255)
+    # Description facultative du ticket
     description = models.TextField(blank=True)
+    # Type de ticket (bug, fonctionnalité, tâche)
     tag = models.CharField(max_length=16, choices=Tag.choices, default=Tag.BUG)
+    # Priorité du ticket
     priority = models.CharField(max_length=16, choices=Priority.choices, default=Priority.MEDIUM)
+    # Statut du ticket
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.TODO)
 
+    # Projet auquel l'issue est rattachée
     project = models.ForeignKey("projects_app.Project", on_delete=models.CASCADE, related_name="issues")
+    # Auteur ayant créé le ticket
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="issues_authored")
+    # Utilisateur assigné à la résolution du ticket
     assignee = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="issues_assigned")
 
+    # Dates de création et de dernière mise à jour
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Trie les issues de la plus récente à la plus ancienne
         ordering = ["-created_at"]
 
     def __str__(self):
+        # Représentation lisible d'une issue
         return f"[{self.project_id}] {self.title}"
 
 
 class Comment(models.Model):
+    # Issue à laquelle le commentaire est lié
     issue = models.ForeignKey("projects_app.Issue", on_delete=models.CASCADE, related_name="comments")
+    # Auteur du commentaire
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="comments_authored")
+    # Contenu du commentaire
     description = models.TextField()
 
+    # Dates de création et de dernière mise à jour
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Trie les commentaires par ordre chronologique
         ordering = ["created_at"]
 
     def __str__(self):
+        # Représentation lisible d'un commentaire
         return f"Comment #{self.pk} on issue {self.issue_id}"
